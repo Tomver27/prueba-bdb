@@ -43,8 +43,24 @@ El prompt del sistema (definido en `lib/agent/system-prompt.ts`) debe establecer
 - Prohibición explícita de afirmar datos que no provengan de una respuesta de herramienta.
 - Instrucción de usar la herramienta de búsqueda antes que la de detalle cuando el usuario da un
   nombre en vez de un identificador exacto (NIT).
+- **Refinamiento de términos de búsqueda (feedback de usuario, mismo día que fase e):** si el
+  nombre que da el usuario es coloquial o una marca conocida ("exito", "aval", "bavaria"), el
+  modelo debe usar su conocimiento general de empresas colombianas para elegir un término más
+  cercano a la razón social legal real (ej. "Almacenes Exito" en vez de "exito") **antes** de la
+  primera llamada a la herramienta, en vez de mandar el texto del usuario literal. Esto no viola
+  la regla de "no afirmar datos sin herramienta": es una decisión de qué parámetro mandar, no una
+  afirmación sobre la entidad — el dato que se le muestra al usuario sigue viniendo 100% de la
+  respuesta real de la tool. Verificado contra la API real: la pregunta "Dame información de
+  exito" resultó en `buscar_entidad_rues({"name": "Almacenes Exito"})`, no `{"name": "exito"}`.
+- **Resumen de resultados siempre visible:** si `buscar_entidad_rues` devuelve más de un
+  resultado (capped o no), la respuesta final debe cerrar con los 2-5 resultados más relevantes
+  (razón social, NIT, ciudad, estado), aunque también se haya dado el detalle de uno en
+  particular — no elegir "el más probable" en silencio.
 - Instrucción de reportar `found: false` o listas vacías como "no se encontró información", no
   como error.
+- Instrucción de formato: markdown simple (negrita `**texto**` + listas con `-`), sin tablas ni
+  encabezados — es el subconjunto que `components/AnswerCard.tsx` sabe renderizar (ver
+  `docs/FRONTEND.md`); cualquier otra sintaxis de markdown se muestra como texto literal.
 - Instrucción de no revelar claves, headers de autenticación ni URLs internas en la respuesta al
   usuario.
 - Límite de herramientas encadenadas por turno (ver "Guardrails" abajo).
@@ -100,6 +116,13 @@ El prompt del sistema (definido en `lib/agent/system-prompt.ts`) debe establecer
   bloqueada. Se corrigió comparando por nombre normalizado (mayúsculas, sin sufijos societarios
   como S.A./SAS/LTDA, sin puntuación) y solo bloqueando coincidencias/subcadenas del mismo
   nombre — dos entidades distintas en la misma pregunta ya no se bloquean entre sí.
+  **Refinamiento de UX (feedback de usuario, mismo día):** la regla 4 del system prompt original
+  solo le decía al modelo "pedí precisar" cuando `capped: true`, sin aprovechar que la respuesta
+  de `buscar_entidad_rues` ya trae hasta 10 resultados reales en `results`. Se corrigió la regla
+  4 para que, antes de pedir precisar, el modelo liste 3-5 de esos resultados (razón social, NIT,
+  ciudad, estado) como ejemplos concretos — el usuario no puede "precisar" a ciegas si no ve qué
+  se encontró. No requirió cambios en las tools ni en Croma: el dato ya viajaba en el
+  function_response, solo faltaba instruir al modelo a usarlo.
 - Si Gemini devuelve una function_call con un nombre de tool que no existe en el registry, el
   orchestrator responde un `function_response` de error sin intentar ejecutar nada.
 

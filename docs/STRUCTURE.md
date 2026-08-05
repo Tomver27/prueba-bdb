@@ -40,9 +40,11 @@
 │       └── env.ts                 # Lectura y validación de variables de entorno (fail-fast)
 │
 ├── components/
-│   ├── ChatBox.tsx                # Campo de pregunta + botón de envío
-│   ├── AnswerCard.tsx             # Respuesta del agente (answer + limitations)
-│   ├── TracePanel.tsx             # Trazabilidad: tools usadas, params, resumen
+│   ├── PageLoader.tsx              # Animación de carga inicial de la página — agregado fase e
+│   ├── ChatMessage.tsx             # Un turno del chat (pregunta + respuesta) — agregado fase e
+│   ├── ChatBox.tsx                 # Campo de pregunta + botón de envío, footer fijo
+│   ├── AnswerCard.tsx              # Respuesta del agente (answer + limitations)
+│   ├── TracePanel.tsx              # Trazabilidad: tools usadas, params, resumen
 │   ├── LoadingState.tsx
 │   └── ErrorState.tsx
 │
