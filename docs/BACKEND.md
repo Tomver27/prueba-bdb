@@ -31,12 +31,14 @@ opcionalmente, si `CROMA_API_KEY` y `GEMINI_API_KEY` están presentes (sin revel
 | `CROMA_MOCK` | No (default `false`) | Activa respuestas simuladas si no hay key de Croma disponible |
 | `CROMA_TIMEOUT_MS` | No (default `15000`) | Timeout por llamada a Croma |
 | `AGENT_MAX_TOOL_CALLS` | No (default `4`) | Guardrail del orchestrator |
-| `NODE_ENV` | Sí | `production` / `development` |
+| `NODE_ENV` | Gestionada por Next.js | `production` / `development` — **corrección (fase b):** Next.js asigna `NODE_ENV` automáticamente (`development` en `next dev`, `production` en el resto) y lo evalúa *antes* de cargar `.env`, por lo que ponerlo en `.env` no cambia el modo de la app. `lib/config/env.ts` lo lee de forma informativa (`process.env.NODE_ENV`) pero no lo exige como requerida ni falla si falta, porque Next.js garantiza que siempre tiene un valor. |
 
 Todas viven en `.env` en el servidor (o en el `env_file` de docker-compose). `lib/config/env.ts`
 debe leerlas una sola vez al boot y **fallar rápido** (proceso no arranca) si falta una requerida
 y `CROMA_MOCK` no está activo — esto cumple el requisito del PDF de manejar "credenciales
-ausentes" de forma explícita, no silenciosa.
+ausentes" de forma explícita, no silenciosa. **Implementación (fase b):** el fail-fast se logra
+con `instrumentation.ts` (convención oficial de Next.js — ver `docs/STRUCTURE.md`), cuyo
+`register()` invoca `getEnv()` una vez al iniciarse el server.
 
 ## Cliente Croma (`lib/croma/client.ts`)
 

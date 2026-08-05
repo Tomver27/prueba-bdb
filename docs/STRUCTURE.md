@@ -62,6 +62,7 @@
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md
+├── instrumentation.ts             # register() — fail-fast de env vars al arrancar (ver BACKEND.md)
 └── package.json
 ```
 
@@ -77,6 +78,8 @@
   llaman a `lib/agent/orchestrator.ts` y devuelven la respuesta. Toda la orquestación vive en `lib/`.
 - **Server-only**: cualquier archivo que importe `CROMA_API_KEY` o `GEMINI_API_KEY` debe estar en
   `lib/` o `app/api/`, nunca en `components/` (que se ejecuta también en el cliente).
+- **`instrumentation.ts`** vive en la raíz por convención de Next.js (no puede moverse a `lib/`);
+  debe limitarse a invocar `lib/config/env.ts::getEnv()` en `register()`, sin lógica adicional.
 
 ## Cómo añadir una tercera herramienta (extensión futura)
 
