@@ -63,9 +63,28 @@ El prompt del sistema (definido en `lib/agent/system-prompt.ts`) debe establecer
 - **Máximo 4 llamadas a herramientas por pregunta** (evita loops costosos con el free tier).
 - **Timeout global del turno**: 30s (más margen que el timeout individual de Croma, ver
   BACKEND.md), tras el cual se responde `status: "error"` con limitación de tiempo de espera.
+  **Nota operativa (verificado en fase c contra la API real, `gemini-flash-latest`, free tier):**
+  cada llamada a `generateContent` puede tomar varios segundos; una pregunta que encadena
+  búsqueda + detalle implica 3 llamadas a Gemini (inicial, tras la búsqueda, tras el detalle) y
+  puede acercarse o superar los 30s solo por latencia del free tier, sin que haya ningún error.
+  No es un bug — es el guardrail funcionando como se especifica — pero el frontend (fase e) debe
+  comunicar que una respuesta puede tardar, y no asumir que un `status: "error"` por timeout
+  siempre implica una falla real.
 - El agente **no ejecuta una tool dos veces con los mismos parámetros** en el mismo turno.
 - Si Gemini devuelve una function_call con un nombre de tool que no existe en el registry, el
   orchestrator responde un `function_response` de error sin intentar ejecutar nada.
+
+## `thought_signature` — requisito no documentado del SDK, descubierto en fase c
+
+Al reenviar el `function_call` del modelo como parte del historial (para que Gemini vea su propia
+llamada anterior antes de recibir el `function_response`), **hay que reenviar el `Part` crudo tal
+como lo devolvió la API** (`response.candidates[0].content.parts`), no reconstruir un
+`{ functionCall: { name, args } }` desde cero. Los modelos actuales (familia `gemini-flash-latest`
+en adelante) adjuntan un campo `thoughtSignature` a esos parts; si se omite, la siguiente llamada
+falla con `400 INVALID_ARGUMENT: Function call is missing a thought_signature`. `lib/agent/
+gemini-client.ts::generateTurn` expone `modelParts` (los parts crudos) exactamente por esto —
+`orchestrator.ts` debe usar siempre `turn.modelParts`, nunca reconstruir el part del `function_call`
+a mano.
 
 ## Declaración de herramientas (forma, no contenido)
 

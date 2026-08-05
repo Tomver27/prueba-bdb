@@ -4,14 +4,17 @@
 // módulo solo arma la llamada a `generateContent` y normaliza la respuesta a algo mínimo que
 // orchestrator.ts pueda consumir sin acoplarse al resto de la superficie del SDK.
 
-import { GoogleGenAI, type Content, type FunctionDeclaration } from "@google/genai";
+import { GoogleGenAI, type Content, type FunctionDeclaration, type Part } from "@google/genai";
 import { getEnv } from "@/lib/config/env";
 import type { ToolDeclaration } from "@/lib/tools/tool-registry";
 
 // Modelo del tier gratuito con soporte de function calling (ver docs/AGENT_GEMINI.md).
-// Confirmar disponibilidad en Google AI Studio al desplegar — la disponibilidad del tier
-// gratuito cambia con el tiempo.
-export const GEMINI_MODEL = "gemini-2.5-flash";
+// Se usa el alias "-latest" en vez de una versión fija: al implementar (fase c, 2026-08-05) se
+// verificó contra la API real que "gemini-2.5-flash" ya no está disponible para cuentas nuevas
+// (404 "no longer available to new users"), mientras que "gemini-flash-latest" sí responde y
+// soporta function calling — confirmar de nuevo si esto vuelve a fallar, ya que Google reasigna
+// a qué modelo concreto apunta el alias con el tiempo.
+export const GEMINI_MODEL = "gemini-flash-latest";
 
 let client: GoogleGenAI | null = null;
 
@@ -30,6 +33,11 @@ export interface GeminiFunctionCall {
 export interface GeminiTurnResult {
   text?: string;
   functionCalls: GeminiFunctionCall[];
+  // Parts crudos del modelo tal como los devolvió la API (incluyen `thoughtSignature`). Deben
+  // reenviarse sin modificar como el turno "model" del historial: reconstruir el `functionCall`
+  // desde cero (sin su thoughtSignature) hace que Gemini rechace la siguiente llamada con
+  // "Function call is missing a thought_signature" (verificado en fase c contra la API real).
+  modelParts: Part[];
 }
 
 function toFunctionDeclaration(tool: ToolDeclaration): FunctionDeclaration {
@@ -58,6 +66,7 @@ export async function generateTurn(
     name: call.name ?? "",
     args: call.args ?? {},
   }));
+  const modelParts = response.candidates?.[0]?.content?.parts ?? [];
 
-  return { text: response.text, functionCalls };
+  return { text: response.text, functionCalls, modelParts };
 }

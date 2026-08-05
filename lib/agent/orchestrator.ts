@@ -166,10 +166,9 @@ export async function run(question: string): Promise<AgentResponse> {
       return { answer, sources, limitations: computeLimitations(sources), status: computeStatus(sources) };
     }
 
-    contents.push({
-      role: "model",
-      parts: turn.functionCalls.map((call) => ({ functionCall: { name: call.name, args: call.args } })),
-    });
+    // Se reenvían los parts crudos del modelo (no reconstruidos) para preservar `thoughtSignature`
+    // — ver docs/AGENT_GEMINI.md y la nota en lib/agent/gemini-client.ts.
+    contents.push({ role: "model", parts: turn.modelParts });
 
     const responseParts: Part[] = [];
 
