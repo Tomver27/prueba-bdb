@@ -1,0 +1,2 @@
+# TODO(fase f): servicios `nginx` (nginx:alpine + docker/nginx.conf, puertos 80/443) y
+# `app` (build desde docker/Dockerfile, sin puertos publicados al host) — ver docs/DEPLOYMENT.md.
