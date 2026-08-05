@@ -222,9 +222,10 @@ export async function run(question: string): Promise<AgentResponse> {
               error: {
                 message:
                   "La búsqueda de esta entidad ya vino truncada (capped) en este turno. No reintentes " +
-                  "con variaciones del mismo nombre: responde ya pidiendo al usuario el NIT exacto o un " +
-                  "nombre más específico para esta entidad. (Si la pregunta trata sobre otra entidad " +
-                  "distinta, sí podés buscarla normalmente.)",
+                  "con variaciones del mismo nombre: responde ya usando los `results` que ya recibiste " +
+                  "de esa búsqueda anterior — lista 3 a 5 como ejemplos (razón social, NIT, ciudad, " +
+                  "estado) y pídele al usuario que confirme cuál es o dé el NIT/nombre legal exacto. " +
+                  "(Si la pregunta trata sobre otra entidad distinta, sí puedes buscarla normalmente.)",
               },
             },
           },
