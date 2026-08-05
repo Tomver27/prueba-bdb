@@ -64,6 +64,18 @@ El prompt del sistema (definido en `lib/agent/system-prompt.ts`) debe establecer
 - Instrucción de no revelar claves, headers de autenticación ni URLs internas en la respuesta al
   usuario.
 - Límite de herramientas encadenadas por turno (ver "Guardrails" abajo).
+- **Pedir siempre el detalle del resultado más relevante, con una excepción real de datos
+  (feedback de usuario):** al principio, el agente se quedaba listando resultados de
+  `buscar_entidad_rues` sin nunca llamar `detalle_entidad_rues`, incluso cuando había un
+  candidato obvio (ej. "Avianca" → un único resultado ACTIVA entre varios CANCELADA). Se agregó
+  la regla de identificar el resultado más relevante y pedir su detalle. **Pero** se descubrió
+  contra la API real que muchos registros de RUES (los de tipo "establecimiento de
+  comercio"/sucursal, a diferencia del registro de la sociedad matriz) traen `nit: null` en
+  `buscar_entidad_rues` — verificado con "Avianca": los 10 resultados de la primera página (de
+  271 totales) tienen `nit: null`, incluida la única entidad ACTIVA. Sin NIT no se puede llamar
+  `detalle_entidad_rues` (y no se debe inventar uno — regla 2/13). El prompt ahora distingue
+  ambos casos: si el candidato más relevante tiene NIT, pedí su detalle; si no, decilo
+  explícitamente en la respuesta en vez de listar sin explicar por qué no se pudo profundizar.
 
 ## Loop de function calling (spec, no código)
 
@@ -100,7 +112,20 @@ El prompt del sistema (definido en `lib/agent/system-prompt.ts`) debe establecer
   falla real. Además, el free tier tiene límites **diarios** muy bajos según el modelo concreto
   al que resuelva el alias (ver sección "Modelo" arriba) — un `status: "error"` con
   "Error al comunicarse con Gemini" también puede ser cuota agotada, no solo timeout.
-- El agente **no ejecuta una tool dos veces con los mismos parámetros** en el mismo turno.
+- El agente **no ejecuta una tool dos veces con los mismos parámetros** en el mismo turno. La
+  comparación de "mismos parámetros" normaliza mayúsculas/espacios en los strings del args (ej.
+  `{"name": "Bancolombia S.A."}` y `{"name": "BANCOLOMBIA S.A."}` cuentan como la misma llamada)
+  — bug encontrado en producción: el modelo repetía la búsqueda con solo un cambio de mayúsculas,
+  gastando una iteración completa del límite de `AGENT_MAX_TOOL_CALLS` sin necesidad. **No** se
+  reutiliza `normalizeSearchName` (que sí quita sufijos como "S.A."/"SAS") para esto: se comprobó
+  que "Bancolombia" y "Bancolombia S.A." devuelven resultados reales distintos de Croma (uno
+  capped, el otro no), así que deduplicarlos habría bloqueado una búsqueda legítima.
+  Complementado con un ajuste al system prompt (regla 9): una vez que una búsqueda ya sirve para
+  responder, no seguir probando variaciones "por las dudas" — cada llamada adicional consume el
+  presupuesto de iteraciones y puede hacer fallar la consulta completa si se agota antes de
+  llegar a texto final. Verificado: la pregunta real "Bancolombia" pasó de fallar sistemáticamente
+  por "máximo de herramientas encadenadas" (3+ búsquedas exploratorias) a resolverse con 1-2
+  llamadas en la gran mayoría de los intentos.
 - **No reintenta `buscar_entidad_rues` con una variación del mismo nombre en el mismo turno una
   vez que esa búsqueda vino truncada** (`capped: true`) — guardrail agregado en fase d tras
   observar en producción (pregunta real "Banco de Bogotá" contra la API real de Croma) que el

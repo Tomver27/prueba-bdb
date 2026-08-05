@@ -39,6 +39,21 @@ function normalizeSearchName(name: string): string {
     .trim();
 }
 
+// Normalización liviana (solo mayúsculas + espacios) para detectar llamadas verdaderamente
+// duplicadas — a diferencia de normalizeSearchName, NO quita sufijos societarios (S.A./SAS/...):
+// se observó contra la API real que "Bancolombia" y "Bancolombia S.A." devuelven resultados
+// distintos de Croma (uno capped, el otro no), así que no son la misma búsqueda y no deben
+// deduplicarse entre sí. Esto solo atrapa el caso de "mismo texto, distinta mayúscula/minúscula
+// o espaciado" (ej. "Bancolombia S.A." vs "BANCOLOMBIA S.A."), que sí es una llamada redundante.
+function normalizeForDedup(value: unknown): unknown {
+  return typeof value === "string" ? value.trim().toUpperCase().replace(/\s+/g, " ") : value;
+}
+
+function buildCallSignature(name: string, args: Record<string, unknown>): string {
+  const normalizedArgs = Object.fromEntries(Object.entries(args).map(([key, value]) => [key, normalizeForDedup(value)]));
+  return `${name}:${JSON.stringify(normalizedArgs)}`;
+}
+
 function isVariationOfCappedName(name: string, cappedNames: Set<string>): boolean {
   const normalized = normalizeSearchName(name);
   if (!normalized) return false;
@@ -233,7 +248,7 @@ export async function run(question: string): Promise<AgentResponse> {
         continue;
       }
 
-      const signature = `${call.name}:${JSON.stringify(call.args)}`;
+      const signature = buildCallSignature(call.name, call.args);
       if (calledSignatures.has(signature)) {
         responseParts.push({
           functionResponse: {
