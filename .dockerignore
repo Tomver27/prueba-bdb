@@ -1,0 +1,12 @@
+# Nunca debe llegar al contexto de build de Docker (evita que un secreto quede horneado en una
+# capa de la imagen, incluso en el stage intermedio que después se descarta — ver docs/DEPLOYMENT.md).
+.env
+.env.*
+!.env.example
+
+node_modules
+.next
+.git
+out
+.vscode
+npm-debug.log*

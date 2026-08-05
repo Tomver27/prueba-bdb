@@ -23,7 +23,7 @@
 | Servicio | Imagen/build | Responsabilidad | Puertos publicados |
 |---|---|---|---|
 | `nginx` | `nginx:alpine` + `docker/nginx.conf` | Termina TLS, sirve como proxy inverso hacia `app:3000`, redirige `http → https` | `80:80`, `443:443` |
-| `app` | build desde `docker/Dockerfile` | Next.js (`next start`) | ninguno publicado al host; solo accesible desde `nginx` vía red interna de Docker |
+| `app` | build desde `docker/Dockerfile` | Next.js (`node server.js`, salida `output: "standalone"` — ver más abajo) | ninguno publicado al host; solo accesible desde `nginx` vía red interna de Docker |
 
 - `app` lee sus variables de entorno desde `env_file: .env` (el `.env` real vive solo en el
   servidor, nunca en el repo).
@@ -34,10 +34,29 @@
 
 ## `docker/Dockerfile` — spec del build
 
-- Multi-stage: `deps` (instala dependencias), `builder` (`next build`), `runner` (imagen final
-  mínima, `node:20-alpine`, usuario no-root, solo copia `.next`, `public`, `package.json` y
-  `node_modules` de producción).
-- `HEALTHCHECK` apuntando a `/api/health`.
+- Multi-stage: `deps` (`npm ci`), `builder` (`next build`), `runner` (imagen final mínima,
+  `node:20-alpine`, usuario no-root, `HEALTHCHECK` apuntando a `/api/health`).
+- **Corrección (fase f, implementación real):** en vez de copiar `.next` + `public` +
+  `package.json` + `node_modules` de producción completos como describe el punto anterior en su
+  versión original, `next.config.ts` declara `output: "standalone"`. Esto genera
+  `.next/standalone` con un `server.js` mínimo que ya trae solo los módulos de `node_modules`
+  que realmente se usan — el `runner` copia `public`, `.next/standalone` y `.next/static`, sin
+  necesitar `npm ci --omit=dev` en ese stage. Imagen final verificada: **~201MB**. Se corre con
+  `CMD ["node", "server.js"]`, no `next start`.
+- **`.dockerignore` agregado** (no estaba en el árbol original de `docs/STRUCTURE.md`): excluye
+  `.env`/`.env.*`, `node_modules`, `.next`, `.git`. Importante por seguridad — sin esto, `COPY . .`
+  en el stage `builder` horneé `.env` (con las keys reales) en una capa de la imagen, aunque el
+  `runner` final no la copie explícitamente; las capas intermedias igual quedan en el historial
+  de build/caché local.
+- **Hallazgo al construir la imagen por primera vez:** `npm ci` fallaba (`EUSAGE`, lockfile
+  desincronizado — entradas de dependencias opcionales nativas de Tailwind/lightningcss,
+  `@emnapi/*`, con versiones distintas a las resueltas localmente). Se corrigió regenerando
+  `package-lock.json` desde cero (`rm -rf node_modules package-lock.json && npm install`). Si
+  esto reaparece al desplegar en el servidor real, aplicar la misma corrección antes de
+  `docker compose up -d --build` — `npm ci` es estricto y no tolera un lockfile desactualizado.
+- **Verificado end-to-end en local** (no solo escrito): `docker build`, `docker compose up -d`,
+  contenedor `app` en estado `healthy`, `GET /api/health` y `POST /api/agent` respondiendo
+  correctamente a través de `nginx` en el puerto 80.
 
 ## TLS
 

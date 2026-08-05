@@ -62,6 +62,7 @@
 │   └── DEPLOYMENT.md
 │
 ├── docker-compose.yml
+├── .dockerignore                  # excluye .env/node_modules/.next del build de Docker — fase f
 ├── .env.example
 ├── README.md
 ├── instrumentation.ts             # register() — fail-fast de env vars al arrancar (ver BACKEND.md)

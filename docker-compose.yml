@@ -1,2 +1,25 @@
-# TODO(fase f): servicios `nginx` (nginx:alpine + docker/nginx.conf, puertos 80/443) y
-# `app` (build desde docker/Dockerfile, sin puertos publicados al host) — ver docs/DEPLOYMENT.md.
+# Servicios `nginx` + `app` (ver docs/DEPLOYMENT.md).
+
+services:
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Con dominio + TLS (ver docs/DEPLOYMENT.md y docker/nginx.conf), montar los certificados:
+      # - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - app
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Sin puertos publicados al host — solo accesible desde `nginx` vía la red interna de Docker
+    # (nginx referencia este servicio por su nombre DNS, "app:3000", ver docker/nginx.conf).
