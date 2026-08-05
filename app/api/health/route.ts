@@ -1,7 +1,18 @@
-import { NextResponse } from "next/server";
+// GET /api/health — healthcheck usado por Docker/Nginx (ver docs/BACKEND.md).
+// Para cuando esta ruta se ejecuta, `instrumentation.ts` ya validó las credenciales requeridas
+// al arrancar el server (fail-fast), así que `getEnv()` aquí solo lee el valor ya cacheado.
 
-// TODO(fase d): reportar también si CROMA_API_KEY y GEMINI_API_KEY están presentes,
-// sin revelar su valor (ver docs/BACKEND.md).
+import { NextResponse } from "next/server";
+import { getEnv } from "@/lib/config/env";
+
 export async function GET() {
-  return NextResponse.json({ ok: true });
+  const env = getEnv();
+
+  return NextResponse.json({
+    ok: true,
+    credentials: {
+      gemini: Boolean(env.geminiApiKey),
+      croma: env.cromaMock ? "mock" : Boolean(env.cromaApiKey),
+    },
+  });
 }

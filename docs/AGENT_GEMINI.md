@@ -7,6 +7,18 @@
   de Google AI Studio al momento de implementar — la disponibilidad del tier gratuito cambia con
   el tiempo. Requisito no negociable: el modelo elegido debe soportar **function calling /
   tool use** nativo (declaración de funciones con JSON Schema).
+- **Historial de verificación contra la API real** (`lib/agent/gemini-client.ts::GEMINI_MODEL`,
+  fases c/d, 2026-08-05) — se usa el alias `gemini-flash-lite-latest`, no una versión fija:
+  - `gemini-2.5-flash` / `gemini-2.5-flash-lite`: 404, ya no disponibles para cuentas nuevas.
+  - `gemini-flash-latest`: funciona, pero resuelve a `gemini-3.6-flash`, cuyo free tier tiene un
+    límite de solo **20 requests/día por proyecto** — se agotó durante las pruebas de fase d con
+    un puñado de llamadas manuales, así que es inviable incluso para desarrollo, no solo para
+    producción.
+  - `gemini-flash-lite-latest`: funciona, soporta function calling, y en la práctica tiene más
+    margen de cuota gratuita — es el que queda configurado por defecto.
+  - Si esto vuelve a fallar (Google reasigna los alias con el tiempo), volver a correr el
+    listado de modelos (`ai.models.list()`) contra la key real y probar candidatos por REST antes
+    de asumir cuál está disponible.
 - La API key vive únicamente en el backend (`GEMINI_API_KEY`), nunca llega al cliente.
 
 ## Responsabilidad del agente
@@ -63,14 +75,31 @@ El prompt del sistema (definido en `lib/agent/system-prompt.ts`) debe establecer
 - **Máximo 4 llamadas a herramientas por pregunta** (evita loops costosos con el free tier).
 - **Timeout global del turno**: 30s (más margen que el timeout individual de Croma, ver
   BACKEND.md), tras el cual se responde `status: "error"` con limitación de tiempo de espera.
-  **Nota operativa (verificado en fase c contra la API real, `gemini-flash-latest`, free tier):**
-  cada llamada a `generateContent` puede tomar varios segundos; una pregunta que encadena
-  búsqueda + detalle implica 3 llamadas a Gemini (inicial, tras la búsqueda, tras el detalle) y
-  puede acercarse o superar los 30s solo por latencia del free tier, sin que haya ningún error.
-  No es un bug — es el guardrail funcionando como se especifica — pero el frontend (fase e) debe
-  comunicar que una respuesta puede tardar, y no asumir que un `status: "error"` por timeout
-  siempre implica una falla real.
+  **Nota operativa (verificado en fases c/d contra la API real, free tier):** cada llamada a
+  `generateContent` puede tomar varios segundos; una pregunta que encadena búsqueda + detalle
+  implica 3 llamadas a Gemini (inicial, tras la búsqueda, tras el detalle) y puede acercarse o
+  superar los 30s solo por latencia del free tier, sin que haya ningún error. No es un bug — es
+  el guardrail funcionando como se especifica — pero el frontend (fase e) debe comunicar que una
+  respuesta puede tardar, y no asumir que un `status: "error"` por timeout siempre implica una
+  falla real. Además, el free tier tiene límites **diarios** muy bajos según el modelo concreto
+  al que resuelva el alias (ver sección "Modelo" arriba) — un `status: "error"` con
+  "Error al comunicarse con Gemini" también puede ser cuota agotada, no solo timeout.
 - El agente **no ejecuta una tool dos veces con los mismos parámetros** en el mismo turno.
+- **No reintenta `buscar_entidad_rues` con una variación del mismo nombre en el mismo turno una
+  vez que esa búsqueda vino truncada** (`capped: true`) — guardrail agregado en fase d tras
+  observar en producción (pregunta real "Banco de Bogotá" contra la API real de Croma) que el
+  modelo, pese a la instrucción del system prompt, insistía llamando la tool con variaciones del
+  nombre ("BANCO DE BOGOTA S.A.", "BANCO DE BOGOTA") en vez de pedir precisar al usuario — 3
+  llamadas a Croma, ~26s totales, una de ellas con timeout. El system prompt solo es guía; este
+  guardrail es determinístico (`lib/agent/orchestrator.ts`, `cappedSearchNames` +
+  `isVariationOfCappedName`) y no depende de que el modelo lo respete.
+  **Corrección (misma fase, mismo día):** la primera versión bloqueaba con un `boolean` global —
+  cualquier búsqueda posterior en el turno, no solo variaciones del mismo nombre. Esto rompió un
+  caso real ("Grupo Aval en alianza con banco de bogotá, que es?"): al truncarse la búsqueda de
+  "Banco de Bogotá", la búsqueda de la entidad genuinamente distinta "Grupo Aval" también quedó
+  bloqueada. Se corrigió comparando por nombre normalizado (mayúsculas, sin sufijos societarios
+  como S.A./SAS/LTDA, sin puntuación) y solo bloqueando coincidencias/subcadenas del mismo
+  nombre — dos entidades distintas en la misma pregunta ya no se bloquean entre sí.
 - Si Gemini devuelve una function_call con un nombre de tool que no existe en el registry, el
   orchestrator responde un `function_response` de error sin intentar ejecutar nada.
 

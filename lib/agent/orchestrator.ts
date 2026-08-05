@@ -27,6 +27,29 @@ function asToolResultShape(value: unknown): ToolResultShape {
   return typeof value === "object" && value !== null ? (value as ToolResultShape) : {};
 }
 
+// Normaliza un nombre de búsqueda para detectar "variaciones del mismo nombre" (mayúsculas,
+// sufijos societarios, puntuación) sin bloquear búsquedas de una entidad genuinamente distinta —
+// ver docs/AGENT_GEMINI.md, "Guardrails".
+function normalizeSearchName(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[.,]/g, "")
+    .replace(/\b(S\s*A\s*S?|SAS|LTDA|E\s*U)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isVariationOfCappedName(name: string, cappedNames: Set<string>): boolean {
+  const normalized = normalizeSearchName(name);
+  if (!normalized) return false;
+  for (const capped of cappedNames) {
+    if (normalized === capped || normalized.includes(capped) || capped.includes(normalized)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("timeout")), ms);
@@ -127,6 +150,13 @@ export async function run(question: string): Promise<AgentResponse> {
   const contents: Content[] = [{ role: "user", parts: [{ text: question }] }];
   const sources: ToolTrace[] = [];
   const calledSignatures = new Set<string>();
+  // Guardrail duro (no solo confiar en el system prompt): una vez que una búsqueda vino truncada
+  // (capped: true), no se permite reintentar buscar_entidad_rues con una variación del MISMO
+  // nombre en el mismo turno — se observó en producción que el modelo insistía con variaciones
+  // ("BANCO DE BOGOTA S.A.", "BANCO DE BOGOTA") en vez de pedir precisar, gastando cuota de
+  // Croma. Se compara por nombre normalizado (no un boolean global) para no bloquear la búsqueda
+  // de una entidad genuinamente distinta en la misma pregunta (ver docs/AGENT_GEMINI.md).
+  const cappedSearchNames = new Set<string>();
 
   const deadline = Date.now() + TURN_TIMEOUT_MS;
 
@@ -180,6 +210,28 @@ export async function run(question: string): Promise<AgentResponse> {
         continue;
       }
 
+      if (
+        call.name === "buscar_entidad_rues" &&
+        typeof call.args.name === "string" &&
+        isVariationOfCappedName(call.args.name, cappedSearchNames)
+      ) {
+        responseParts.push({
+          functionResponse: {
+            name: call.name,
+            response: {
+              error: {
+                message:
+                  "La búsqueda de esta entidad ya vino truncada (capped) en este turno. No reintentes " +
+                  "con variaciones del mismo nombre: responde ya pidiendo al usuario el NIT exacto o un " +
+                  "nombre más específico para esta entidad. (Si la pregunta trata sobre otra entidad " +
+                  "distinta, sí podés buscarla normalmente.)",
+              },
+            },
+          },
+        });
+        continue;
+      }
+
       const signature = `${call.name}:${JSON.stringify(call.args)}`;
       if (calledSignatures.has(signature)) {
         responseParts.push({
@@ -203,6 +255,10 @@ export async function run(question: string): Promise<AgentResponse> {
         };
       }
       const durationMs = Date.now() - start;
+
+      if (call.name === "buscar_entidad_rues" && asToolResultShape(result).capped && typeof call.args.name === "string") {
+        cappedSearchNames.add(normalizeSearchName(call.args.name));
+      }
 
       sources.push(buildToolTrace(call.name, call.args, result, durationMs));
       responseParts.push({ functionResponse: { name: call.name, response: toFunctionResponsePayload(result) } });

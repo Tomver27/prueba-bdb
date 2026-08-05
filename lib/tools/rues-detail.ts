@@ -1,4 +1,4 @@
-// Tool `detalle_entidad_rues` — POST /co/rues-entity-by-nit (ver docs/TOOLS_CROMA.md).
+// Tool `detalle_entidad_rues` — POST /co/rues/entity-by-nit/v1 (ver docs/TOOLS_CROMA.md).
 // El usuario da un NIT exacto, o el agente ya obtuvo uno con buscar_entidad_rues.
 //
 // Nota: el campo real que espera Croma es `document_number`, no `nit` (verificado contra
@@ -91,7 +91,7 @@ export async function execute(params: DetalleEntidadRuesParams): Promise<Detalle
   }
 
   const res = await cromaPost<RuesDetailData>({
-    path: "/co/rues-entity-by-nit",
+    path: "/co/rues/entity-by-nit/v1",
     body: { document_number: nit },
   });
 

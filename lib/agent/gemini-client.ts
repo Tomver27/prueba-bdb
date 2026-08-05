@@ -9,12 +9,15 @@ import { getEnv } from "@/lib/config/env";
 import type { ToolDeclaration } from "@/lib/tools/tool-registry";
 
 // Modelo del tier gratuito con soporte de function calling (ver docs/AGENT_GEMINI.md).
-// Se usa el alias "-latest" en vez de una versión fija: al implementar (fase c, 2026-08-05) se
-// verificó contra la API real que "gemini-2.5-flash" ya no está disponible para cuentas nuevas
-// (404 "no longer available to new users"), mientras que "gemini-flash-latest" sí responde y
-// soporta function calling — confirmar de nuevo si esto vuelve a fallar, ya que Google reasigna
-// a qué modelo concreto apunta el alias con el tiempo.
-export const GEMINI_MODEL = "gemini-flash-latest";
+// Se usa el alias "-latest" en vez de una versión fija — confirmar de nuevo si esto vuelve a
+// fallar, ya que Google reasigna a qué modelo concreto apunta el alias con el tiempo. Historial
+// de verificación contra la API real (fase c/d, 2026-08-05):
+//   - "gemini-2.5-flash" / "gemini-2.5-flash-lite": 404, ya no disponibles para cuentas nuevas.
+//   - "gemini-flash-latest": funciona, pero resuelve a "gemini-3.6-flash", cuyo free tier tiene
+//     un límite de solo 20 requests/día por proyecto (se agotó durante las pruebas de fase d).
+//   - "gemini-flash-lite-latest": funciona y soporta function calling; se usa por defecto por
+//     tener, en la práctica, más margen de cuota gratuita que el alias "flash" completo.
+export const GEMINI_MODEL = "gemini-flash-lite-latest";
 
 let client: GoogleGenAI | null = null;
 

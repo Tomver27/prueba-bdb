@@ -35,8 +35,8 @@ Detalle completo del diseño por componente:
 
 ## Endpoints de Usecroma utilizados
 
-- `POST /co/rues-entities-by-name` — búsqueda de entidades colombianas por nombre (RUES).
-- `POST /co/rues-entity-by-nit` — detalle completo de una entidad por NIT, incluye estados
+- `POST /co/rues/entities-by-name/v1` — búsqueda de entidades colombianas por nombre (RUES).
+- `POST /co/rues/entity-by-nit/v1` — detalle completo de una entidad por NIT, incluye estados
   financieros por año (permite comparaciones simples entre periodos).
 
 Ambos endpoints están documentados en detalle, con su mapeo de parámetros, salida y errores, en

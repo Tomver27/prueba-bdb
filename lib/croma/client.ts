@@ -198,12 +198,12 @@ function buildMockResult(
   path: string,
   body: Record<string, unknown>,
 ): CromaResult<RuesSearchData> | CromaResult<RuesDetailData> | CromaResult<never> {
-  if (path === "/co/rues-entities-by-name") {
+  if (path === "/co/rues/entities-by-name/v1") {
     const name = typeof body.name === "string" ? body.name : "";
     return { ok: true, data: buildMockSearchData(name), httpStatus: 200 };
   }
 
-  if (path === "/co/rues-entity-by-nit") {
+  if (path === "/co/rues/entity-by-nit/v1") {
     const documentNumber = typeof body.document_number === "string" ? body.document_number : "";
     return { ok: true, data: buildMockDetailData(documentNumber), httpStatus: 200 };
   }

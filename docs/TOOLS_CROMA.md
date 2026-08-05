@@ -5,6 +5,19 @@ Fuente de la documentación pública consultada: `docs.usecroma.com` (índice co
 (Registro Único Empresarial y Social) de Colombia, siguiendo el patrón "buscar una entidad y
 consultar su detalle" que pide la prueba técnica.
 
+## Verificar paths y schemas reales
+
+Los paths de esta tabla fueron corregidos en fase d contra la fuente **autoritativa y siempre
+actualizada**: `GET $CROMA_API_BASE_URL/catalog` (público, no requiere key) devuelve el catálogo
+completo de endpoints con su `path`, `method`, `request_schema` y `rate_limit` exactos; también
+hay un OpenAPI completo en `GET $CROMA_API_BASE_URL/openapi`. Si algo en este documento vuelve a
+quedar desactualizado, `/catalog` es la forma más rápida de confirmarlo (más rápida que leer
+`docs.usecroma.com`, que en fase b resultó estar desactualizado en los mismos paths).
+
+- **Rate limit real de RUES**: 100 requests / 24h **por endpoint** (confirmado vía `/catalog`;
+  headers `x-ratelimit-limit`/`x-ratelimit-remaining`/`x-ratelimit-reset` en cada respuesta). Más
+  generoso que el free tier de Gemini, pero de todos modos hay que cuidarlo en desarrollo.
+
 ## Autenticación (aplica a ambas)
 
 - Header: `Authorization: Bearer $CROMA_API_KEY`
@@ -27,7 +40,7 @@ consultar su detalle" que pide la prueba técnica.
 
 | Campo | Valor |
 |---|---|
-| Endpoint Croma | `POST /co/rues-entities-by-name` |
+| Endpoint Croma | `POST /co/rues/entities-by-name/v1` (corregido en fase d: el path real difiere del original documentado aquí — verificado contra `GET /catalog` de la API en vivo) |
 | Cuándo la usa el agente | El usuario da un **nombre** de empresa/entidad colombiana, no un identificador exacto. Corresponde al ejemplo "Busca información sobre [entidad]" del PDF. |
 | Parámetros de entrada | `name` (string, requerido, mínimo 3 caracteres); `page` (number, opcional, default 1) |
 | Validación propia | Rechazar `name` vacío o de 1-2 caracteres antes de llamar a Croma (evita `invalid_param` innecesario). |
@@ -38,7 +51,7 @@ consultar su detalle" que pide la prueba técnica.
 
 | Campo | Valor |
 |---|---|
-| Endpoint Croma | `POST /co/rues-entity-by-nit` |
+| Endpoint Croma | `POST /co/rues/entity-by-nit/v1` (corregido en fase d: el path real difiere del original documentado aquí — verificado contra `GET /catalog` de la API en vivo) |
 | Cuándo la usa el agente | El usuario da un **NIT** exacto, o el agente ya obtuvo un NIT desde Tool 1 y necesita el detalle. Corresponde a "Dame el detalle de [identificador]" y, usando el histórico de estados financieros por año que trae la respuesta, a "¿Qué cambió entre X e Y?" (comparación entre dos años fiscales). |
 | Parámetros de entrada | `nit` (string, requerido, solo dígitos, sin dígito de verificación, 9-10 dígitos). **Nota (confirmado contra `docs.usecroma.com` en fase b):** el campo que Croma espera en el body real es `document_number` (patrón `^\d{4,15}$`), no `nit`. Nuestra tool sigue exponiendo el parámetro como `nit` de cara a Gemini/el agente (más natural para el modelo) y `lib/tools/rues-detail.ts` lo mapea a `document_number` al construir el request. |
 | Validación propia | Rechazar `nit` no numérico o con longitud fuera de rango típico (9-10 dígitos) antes de llamar a Croma. |

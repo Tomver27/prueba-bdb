@@ -1,4 +1,4 @@
-// Tool `buscar_entidad_rues` — POST /co/rues-entities-by-name (ver docs/TOOLS_CROMA.md).
+// Tool `buscar_entidad_rues` — POST /co/rues/entities-by-name/v1 (ver docs/TOOLS_CROMA.md).
 // El usuario da un nombre de empresa, no un identificador exacto.
 
 import { cromaPost } from "@/lib/croma/client";
@@ -64,7 +64,7 @@ export async function execute(params: BuscarEntidadRuesParams): Promise<BuscarEn
   }
 
   const res = await cromaPost<RuesSearchData>({
-    path: "/co/rues-entities-by-name",
+    path: "/co/rues/entities-by-name/v1",
     body: { name, page },
   });
 
