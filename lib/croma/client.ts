@@ -297,7 +297,55 @@ function buildMockSearchData(name: string): RuesSearchData {
   };
 }
 
+// NIT genérico que `buildMockSearchData` genera para cualquier búsqueda que no sea "acme" —
+// debe reconocerse acá también, si no, la búsqueda "encuentra" una entidad cuyo detalle después
+// dice found:false, un dato simulado que se contradice a sí mismo (bug real encontrado en QA).
+const GENERIC_MOCK_NIT = "900999000";
+
 function buildMockDetailData(documentNumber: string): RuesDetailData {
+  if (documentNumber === GENERIC_MOCK_NIT) {
+    return {
+      found: true,
+      document_number: documentNumber,
+      entity: {
+        registry_id: "MOCK-REG-0099",
+        nit: GENERIC_MOCK_NIT,
+        verification_digit: "3",
+        name: "ENTIDAD SIMULADA SAS",
+        acronym: null,
+        chamber_code: "11",
+        chamber_name: "Cámara de Comercio de Bogotá",
+        registration_number: "0009990000",
+        registration_status: "Activa",
+        legal_organization: "Sociedad por Acciones Simplificada",
+        registration_date: "2018-01-15",
+        last_renewal_date: "2024-02-01",
+        last_renewed_year: "2024",
+        expiration_date: null,
+        cancellation_date: null,
+        cancellation_reason: null,
+        primary_activity: { code: "4649", description: "Comercio al por mayor de otros enseres domésticos" },
+        secondary_activity: null,
+        commercial_address: "Carrera 10 # 20-30",
+        commercial_municipality: "Bogotá D.C.",
+        commercial_phones: [],
+        commercial_email: null,
+        fiscal_address: "Carrera 10 # 20-30",
+        fiscal_municipality: "Bogotá D.C.",
+        fiscal_phones: [],
+        fiscal_email: null,
+        is_bic: false,
+        is_social_enterprise: false,
+        domain_forfeiture: false,
+      },
+      financials: [],
+      renewals: [{ year: "2024", renewal_date: "2024-02-01" }],
+      related_parties: [],
+      notices: [],
+      simulated: true,
+    };
+  }
+
   if (documentNumber === "900123456") {
     return {
       found: true,

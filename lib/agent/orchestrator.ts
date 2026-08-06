@@ -123,6 +123,12 @@ function toFunctionResponsePayload(rawResult: unknown): Record<string, unknown> 
   return { output: rawResult as Record<string, unknown> };
 }
 
+// Detecta si una fuente "ok" no trajo datos reales (found: false, o una búsqueda con 0
+// resultados) — usado para distinguir "no_data" (nada encontrado en ningún lado) de "partial"
+// (se encontró algo en una fuente pero no en otra, ej. la búsqueda encontró la entidad pero el
+// detalle no) según la semántica exacta de docs/TRACEABILITY.md.
+const EMPTY_RESULT_PATTERN = /found: false|sin resultados|0 coincidencia/i;
+
 function computeStatus(sources: ToolTrace[]): AgentStatus {
   if (sources.length === 0) return "no_data";
 
@@ -132,10 +138,12 @@ function computeStatus(sources: ToolTrace[]): AgentStatus {
   if (anyError && anyOk) return "partial";
   if (anyError) return "error";
 
-  const lastOk = [...sources].reverse().find((s) => s.status === "ok");
-  if (lastOk && /found: false|sin resultados/i.test(lastOk.summary)) return "no_data";
+  const okSources = sources.filter((s) => s.status === "ok");
+  const emptyCount = okSources.filter((s) => EMPTY_RESULT_PATTERN.test(s.summary)).length;
 
-  return "ok";
+  if (emptyCount === 0) return "ok";
+  if (emptyCount === okSources.length) return "no_data";
+  return "partial";
 }
 
 function computeLimitations(sources: ToolTrace[]): string[] {
@@ -144,9 +152,12 @@ function computeLimitations(sources: ToolTrace[]): string[] {
     .map((s) => `${s.tool}: ${s.summary}`);
 
   if (sources.some((s) => s.summary.startsWith("[SIMULADO]"))) {
+    // No asumir por qué CROMA_MOCK está activo (falta de key, cuota agotada, entorno de
+    // desarrollo, etc.) — bug de QA: el mensaje anterior decía "porque no hay una CROMA_API_KEY
+    // real configurada", que es falso cuando el modo mock se activa por otras razones (ej. cuota
+    // diaria de Croma agotada con una key real presente).
     limitations.push(
-      "Los datos mostrados son simulados (CROMA_MOCK=true) porque no hay una CROMA_API_KEY real " +
-        "configurada; no provienen de RUES en vivo.",
+      "Los datos mostrados son simulados (CROMA_MOCK=true) y no provienen de RUES en vivo.",
     );
   }
 
@@ -172,6 +183,16 @@ export async function run(question: string): Promise<AgentResponse> {
   // Croma. Se compara por nombre normalizado (no un boolean global) para no bloquear la búsqueda
   // de una entidad genuinamente distinta en la misma pregunta (ver docs/AGENT_GEMINI.md).
   const cappedSearchNames = new Set<string>();
+  // Guardrail duro (bug encontrado en QA): si una tool devuelve error (ej. validation_error) más
+  // de una vez, el modelo tiende a seguir probando parámetros distintos en vez de reportar el
+  // error al usuario — igual patrón que el de `cappedSearchNames` arriba pero para CUALQUIER
+  // categoría de error, no solo capped. Se observó agotar las 6 iteraciones de
+  // AGENT_MAX_TOOL_CALLS reintentando buscar_entidad_rues con nombres distintos ante un
+  // invalid_param persistente, terminando en "máximo de herramientas encadenadas" en vez de
+  // reportar el error real. Al segundo error consecutivo de una misma tool, se bloquean más
+  // llamadas a esa tool en el turno.
+  const toolErrorCounts = new Map<string, number>();
+  const MAX_ERRORS_PER_TOOL = 2;
 
   const deadline = Date.now() + TURN_TIMEOUT_MS;
 
@@ -248,6 +269,23 @@ export async function run(question: string): Promise<AgentResponse> {
         continue;
       }
 
+      if ((toolErrorCounts.get(call.name) ?? 0) >= MAX_ERRORS_PER_TOOL) {
+        responseParts.push({
+          functionResponse: {
+            name: call.name,
+            response: {
+              error: {
+                message:
+                  `${call.name} ya falló ${MAX_ERRORS_PER_TOOL} veces en este turno con distintos parámetros. ` +
+                  "No sigas probando parámetros nuevos: respondé ya explicando esta limitación al usuario " +
+                  "usando el mensaje de error real que ya recibiste, en vez de inventar un resultado.",
+              },
+            },
+          },
+        });
+        continue;
+      }
+
       const signature = buildCallSignature(call.name, call.args);
       if (calledSignatures.has(signature)) {
         responseParts.push({
@@ -274,6 +312,10 @@ export async function run(question: string): Promise<AgentResponse> {
 
       if (call.name === "buscar_entidad_rues" && asToolResultShape(result).capped && typeof call.args.name === "string") {
         cappedSearchNames.add(normalizeSearchName(call.args.name));
+      }
+
+      if (asToolResultShape(result).ok === false) {
+        toolErrorCounts.set(call.name, (toolErrorCounts.get(call.name) ?? 0) + 1);
       }
 
       sources.push(buildToolTrace(call.name, call.args, result, durationMs));
