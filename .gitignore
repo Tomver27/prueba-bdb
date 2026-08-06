@@ -30,8 +30,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — .env.example nunca tiene secretos reales (solo nombres de variables) y sí debe
+# subirse al repo, ya que README.md pide "cp .env.example .env" como paso de instalación.
 .env*
+!.env.example
 
 # vercel
 .vercel
