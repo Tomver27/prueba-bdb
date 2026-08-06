@@ -8,6 +8,8 @@ redacta una respuesta trazable, sin inventar información.
 La especificación completa del diseño (para desarrollo o para guiar generación de código con IA) vive en
 [`docs/`](./docs).
 
+La página web es accesible desde internet con el siguiente enlace: http://54.147.45.192/
+
 ## Arquitectura
 
 Monolito Next.js (App Router) desplegado en una instancia EC2 de AWS mediante Docker Compose:
